@@ -1,19 +1,24 @@
-// This must be uploaded along with the file named secrets.h, find this file in the repository.
-
 #include "secrets.h"
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include "WiFi.h"
 #include "DHT.h"
+#include "time.h"
 
 #define DHTTYPE DHT11
-#define DHTPIN 15.    //Define here which data pin you wish to use
+#define DHTPIN 15
 DHT dht(DHTPIN, DHTTYPE);
 
 
-#define AWS_IOT_PUBLISH_TOPIC   "esp32/pub".  //Topic name
-#define AWS_IOT_SUBSCRIBE_TOPIC "esp32/sub".  //Topic name
+
+#define AWS_IOT_PUBLISH_TOPIC   "esp32/pub1"
+#define AWS_IOT_SUBSCRIBE_TOPIC "esp32/sub1"
+
+
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 0;
+const int   daylightOffset_sec = 3600;
 
 WiFiClientSecure net = WiFiClientSecure();
 PubSubClient client(net);
@@ -25,7 +30,7 @@ void connectAWS()
 
   Serial.println("Connecting to Wi-Fi");
 
-  while (WiFi.status() != WL_CONNECTED){
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
@@ -48,7 +53,7 @@ void connectAWS()
     delay(100);
   }
 
-  if(!client.connected()){
+  if (!client.connected()) {
     Serial.println("AWS IoT Timeout!");
     return;
   }
@@ -61,7 +66,21 @@ void connectAWS()
 
 void publishMessage()
 {
+
+  //  unsigned long runMillis= millis();
+  //  unsigned long allSeconds=millis()/1000;
+  //  int runHours= allSeconds/3600;
+  //  int secsRemaining=allSeconds%3600;
+  //  int runMinutes=secsRemaining/60;
+  //  int runSeconds=secsRemaining%60;
+
   StaticJsonDocument<200> doc;
+  // char buf[21];
+  // sprintf(buf,"%02d:%02d:%02d",runHours,runMinutes,runSeconds);
+  //  doc["time"] = (buf);
+
+  doc["time"] = printLocalTime();
+
   float d = dht.readTemperature();
   doc["temp1"] = d;
   float h = dht.readHumidity();
@@ -85,6 +104,10 @@ void messageHandler(char* topic, byte* payload, unsigned int length) {
 void setup() {
   Serial.begin(9600);
   connectAWS();
+  // Init and get the time
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+
+  printLocalTime();
   dht.begin();
 }
 
@@ -92,4 +115,37 @@ void loop() {
   publishMessage();
   client.loop();
   delay(1000);
+}
+
+/*
+  String printLocalTime() {
+  time_t now;
+  char strftime_buf[64];
+  struct tm timeinfo;
+
+  time(&now);
+  // Set timezone to China Standard Time
+  setenv("TZ", "CST-8", 1);
+  tzset();
+
+  localtime_r(&now, &timeinfo);
+  strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+  return strftime_buf;
+  }
+*/
+String printLocalTime() {
+
+  char outputty[64];
+  time_t now;
+  char strftime_buf[64];
+  struct tm timeinfo;
+
+  time(&now);
+  setenv("TZ", "GMT+0BST-1,M3.5.0/01:00:00,M10.5.0/02:00:00", 1);
+  tzset();
+
+  localtime_r(&now, &timeinfo);
+  strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+  sprintf(outputty, "%s", strftime_buf);
+  return outputty;
 }
